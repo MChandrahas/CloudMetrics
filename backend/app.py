@@ -40,8 +40,6 @@ def get_metrics():
 
     try:
         cur = conn.cursor()
-        # Get raw stats from pg_stat_statements
-        # We sum up calls and time to get a global view
         query = """
             SELECT 
                 SUM(calls) as total_calls, 
@@ -51,10 +49,13 @@ def get_metrics():
         cur.execute(query)
         result = cur.fetchone()
         
-        # Calculate averages (Safe division)
-        total_calls = result['total_calls'] if result['total_calls'] else 0
-        total_time = result['total_time_ms'] if result['total_time_ms'] else 0
+        # --- FIX STARTS HERE ---
+        # Force everything to be a standard float to avoid Decimal vs Float errors
+        total_calls = float(result['total_calls']) if result['total_calls'] else 0.0
+        total_time = float(result['total_time_ms']) if result['total_time_ms'] else 0.0
+        
         avg_time = (total_time / total_calls) if total_calls > 0 else 0
+        # --- FIX ENDS HERE ---
 
         cur.close()
         conn.close()

@@ -25,7 +25,16 @@ services:
       - db
     environment:
       - FLASK_ENV=development
-      
+  
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src  # Live reloading!
+
   # 2. Database Viewer (Optional tool to see tables)
   pgadmin:
     image: dpage/pgadmin4
@@ -37,3 +46,10 @@ services:
       - "5050:80"
     depends_on:
       - db
+
+  simulator:
+    build: ./simulator
+    container_name: cloudmetrics_simulator
+    depends_on:
+      - db
+    profiles: ["tools"]  # Only run when explicitly requested
