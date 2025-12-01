@@ -16,6 +16,16 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./postgres_config.conf:/etc/postgresql/postgresql.conf
 
+  backend:
+    build: ./backend
+    container_name: cloudmetrics_backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    environment:
+      - FLASK_ENV=development
+      
   # 2. Database Viewer (Optional tool to see tables)
   pgadmin:
     image: dpage/pgadmin4
