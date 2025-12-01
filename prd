@@ -1,0 +1,183 @@
+# **CloudMetrics MVP - Product Requirements Document**
+
+**Project Goal**: Build a demonstrable PostgreSQL performance monitoring system that can be cloned, run locally with zero cost, and showcased in technical interviews within 5 minutes.
+
+---
+
+## **1. Product Vision**
+
+A frictionless, Docker-based monitoring dashboard that proves core backend, frontend, and DevOps skills to hiring managers by visualizing live database metrics and simulating real-world alerting logic.
+
+---
+
+## **2. Target User Persona**
+
+**Primary**: Technical Hiring Manager (Backend/DevOps/Full-Stack roles)  
+**Secondary**: Peer developers reviewing your GitHub  
+**Goal**: Run `docker-compose up` and see a live, updating dashboard without debugging environment issues.
+
+---
+
+## **3. Problem Statement**
+
+Developers need portfolio projects that are **runnable, not just readable**. Most GitHub repos fail because of undocumented dependencies, port conflicts, and missing setup steps. This MVP eliminates friction while demonstrating production-relevant patterns.
+
+---
+
+## **4. MVP Scope: IN vs. OUT**
+
+| **IN SCOPE** (Must-Have) | **OUT OF SCOPE** (Explicitly Cut) |
+|--------------------------|-----------------------------------|
+| ✅ Local Docker Compose setup | ❌ AWS deployment (write IaC, don't run it) |
+| ✅ PostgreSQL with `pg_stat_statements` | ❌ Authentication/Authorization |
+| ✅ Flask API with 2 endpoints | ❌ Unit/integration tests |
+| ✅ React dashboard with 3 live charts | ❌ CI/CD pipelines |
+| ✅ Auto-refreshing UI (30s polling) | ❌ Multi-database support |
+| ✅ Load simulator script | ❌ Persistent cloud storage |
+| ✅ Local alerting (Gmail SMTP or console) | ❌ Production-grade security (secrets mgmt) |
+| ✅ `pg_stat` data retention: 24 hours | ❌ Data rollups beyond 24h |
+| ✅ GitHub repo with README + GIF demo | ❌ Kubernetes, Terraform state files |
+| ✅ CloudFormation/IaC as documentation | ❌ Custom domain, SSL certificates |
+
+---
+
+## **5. User Stories (From Hiring Manager Perspective)**
+
+1. **As a hiring manager**, I can clone the repo and run a single script to see a working dashboard in under 5 minutes, so I can evaluate the candidate's skills without debugging.
+
+2. **As an interviewer**, I can run a load simulator and **immediately see** a spike in the dashboard, so I know the project is live, not mocked data.
+
+3. **As a reviewer**, I can read the README and see a **30-second GIF** of the demo, so I understand the project without running it.
+
+4. **As a technical evaluator**, I can inspect the CloudFormation/IaC code in the repo, so I assess the candidate's understanding of production deployment patterns.
+
+---
+
+## **6. Core Features & Acceptance Criteria**
+
+### **Feature 1: Data Collection API**
+- **Endpoint**: `GET /metrics/current`
+- **Returns**: JSON with `qps`, `avg_query_time_ms`, `cache_hit_ratio`, `active_connections`, `slow_query_count`
+- **Criteria**: 
+  - Queries `pg_stat_statements` and `pg_stat_database` every 60s
+  - Stores last 24h of data in `metric_history` table
+  - Auto-deletes data older than 24h (`DELETE` statement in cron)
+
+### **Feature 2: React Dashboard**
+- **Charts**: 
+  1. Line chart: Queries/sec over last hour
+  2. Bar chart: Top 10 slowest query calls (by `mean_exec_time`)
+  3. Gauge: Current active connections
+- **Criteria**:
+  - Auto-refreshes every 30s using `react-query`
+  - Shows "Last Updated" timestamp
+  - Handles API failure gracefully (shows "Reconnecting..." spinner)
+
+### **Feature 3: Load Simulator**
+- **Script**: `load_simulator.py`
+- **Behavior**: Runs 5 concurrent threads executing slow queries (`SELECT pg_sleep(random())`, unindexed `WHERE` clauses)
+- **Criteria**: When running, dashboard QPS visibly spikes within 60 seconds.
+
+### **Feature 4: Alerting (Local)**
+- **Implementation**: Python script that polls `pg_stat_statements` every 30s
+- **Trigger**: If any query's `mean_exec_time > 1000ms`, **send email via Gmail SMTP** (free) or print to console
+- **Criteria**: When simulator runs, script logs `ALERT: Query XYZ > 1s threshold` within 30s.
+
+### **Feature 5: Cloud-Ready IaC (Documentation)**
+- **Deliverable**: `/aws-deployment/cloudformation.yaml`
+- **Contents**: Lambda function, CloudWatch Logs subscription filter, SNS topic, IAM role
+- **Criteria**: 
+  - Includes comments: *"Deploy with `aws cloudformation deploy`. Free tier covers 1M invocations."*
+  - **Never deployed**—but code is production-ready.
+
+---
+
+## **7. Success Metrics (MVP is Done When...)**
+
+- [ ] `git clone && ./scripts/quickstart.sh` runs without errors on macOS, Linux, Windows (WSL2)
+- [ ] Dashboard loads at `localhost:3000` and shows **non-zero data** within 2 minutes
+- [ ] Running `load_simulator.py` causes **visible spike** on the QPS chart
+- [ ] Alert script prints/log **at least one alert** when simulator is running
+- [ ] README includes **30-second GIF** showing the full flow (simulator start → dashboard spike → alert)
+- [ ] CloudFormation file passes `aws cloudformation validate-template` (no syntax errors)
+
+---
+
+## **8. Technical Specifications**
+
+### **Tech Stack**
+- **Backend**: Python 3.11, Flask, psycopg2-binary, Gunicorn (for healthcheck)
+- **Frontend**: React 18, Vite, Recharts, React-Query
+- **Database**: PostgreSQL 15-alpine, `pg_stat_statements` extension enabled
+- **Orchestration**: Docker Compose v3.8
+- **Monitoring**: Custom Python scripts (no external services)
+- **Documentation**: Markdown, GIF (recorded with LICEcap or similar)
+
+### **Directory Structure**
+```
+cloudmetrics/
+├── backend/
+│   ├── app.py
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── Dockerfile
+├── simulator/
+│   ├── load_simulator.py
+│   └── Dockerfile
+├── scripts/
+│   └── quickstart.sh
+├── aws-deployment/
+│   └── cloudformation.yaml
+├── docker-compose.yml
+├── init.sql
+├── .env.example
+└── README.md
+```
+
+---
+
+## **9. Risks & Mitigations**
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **PostgreSQL port conflict** | High | Use `5433:5432` mapping in docker-compose |
+| **Docker not installed** | High | README pre-flight check: "Requires Docker Desktop" |
+| **Gmail blocks SMTP** | Medium | Provide fallback: "Alert prints to console if SMTP fails" |
+| **Charts show no data** | High | Simulator auto-runs on startup for 30s to seed metrics |
+| **Windows path issues** | Medium | Use forward slashes in docker-compose; document WSL2 requirement |
+
+---
+
+## **10. Timeline & Effort**
+
+**Total Development Time**: **3-4 weeks (80-100 hours)**  
+**Breakdown**:
+- Week 1: Docker setup + Flask API + `pg_stat` queries
+- Week 2: React dashboard + Recharts integration
+- Week 3: Load simulator + local alerting script
+- Week 4: CloudFormation + README polish + GIF recording
+
+---
+
+## **11. Deliverables for GitHub Repo**
+
+1. **README.md** with:
+   - 30-second demo GIF at the top
+   - "Quick Start" section (3 commands max)
+   - "Architecture" diagram (ASCII art or image)
+   - "How I'd Scale This" section (acknowledges limitations)
+
+2. **Working code**: All Dockerfiles, scripts, and config files
+
+3. **IaC code**: `cloudformation.yaml` (or Terraform) in `/aws-deployment`
+
+4. **No secrets**: All credentials in `.env.example`, never committed
+
+---
+
+## **Final Principle: "Demo or It Didn't Happen"**
+
+If a hiring manager can't see it working in 5 minutes, it doesn't exist. Optimize every decision for **speed of demonstration**, not architectural purity.
