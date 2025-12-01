@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudMetrics: High-Availability Fargate Deployment (Portfolio Demo)'
+
+Resources:
+  # 1. The Network
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      Tags: [{Key: Name, Value: CloudMetricsVPC}]
+
+  # 2. The Database (RDS Postgres)
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      DBName: cloudmetrics_db
+      MasterUsername: admin
+      MasterUserPassword: '{{resolve:ssm-secure:DBPassword}}' # Secure parameter
+      PubliclyAccessible: false
+
+  # 3. The Backend Service (Fargate)
+  BackendTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: cloudmetrics-backend
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ContainerDefinitions:
+        - Name: backend
+          Image: <YOUR_ECR_REPO_URI>:latest
+          PortMappings: [{ContainerPort: 5000}]
+          Environment:
+            - Name: DB_HOST
+              Value: !GetAtt DBInstance.Endpoint.Address
+
+  # 4. The Frontend Service (S3 + CloudFront)
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+Outputs:
+  DatabaseEndpoint:
+    Description: "RDS Endpoint"
+    Value: !GetAtt DBInstance.Endpoint.Address
